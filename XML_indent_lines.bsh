@@ -1,0 +1,195 @@
+/*
+ * XML_indent_lines.bsh - version 0.3
+ *
+ * Copyright 2011 Mark Burton (burtoogle@gmail.com)
+ *
+ * Inspired by Robert McKinnon's Ruby_auto_indent_and_insert_end.bsh
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
+ */
+
+String makeIndent(width, tabSize) {
+	indent = "";
+	if(tabSize > 0) {
+		while(width > tabSize) {
+			indent += "\t";
+			width -= tabSize;
+		}
+	}
+	while(width > 4) {
+		indent += "    ";
+		width -= 4;
+	}
+	while(width > 2) {
+		indent += "  ";
+		width -= 2;
+	}
+	while(width-- > 0)
+		indent += " ";
+	return indent;
+}
+
+int getElementNestingDelta(line) {
+	// determine how this line changes the element nesting
+	line = line.trim();
+	delta = 0;
+	for(i = 0; i < line.length(); ++i) {
+		c = line.charAt(i);
+		if(c == '<') {
+			if((i + 1) < line.length()) {
+				nextC = line.charAt(i + 1);
+				if(nextC == '/') {
+					// end element
+					--delta;
+				}
+				else if(nextC == '!') {
+					// start comment
+				}
+				else if(nextC == '?') {
+					// start declaration
+					++delta;
+				}
+				else {
+					// start element
+					++delta;
+				}
+			}
+			else {
+				// start element
+				++delta;
+			}
+		}
+		else if(c == '/' || c == '?') {
+			if((i + 1) < line.length() && line.charAt(i + 1) == '>') {
+				// end element or declaration
+				--delta;
+			}
+		}
+	}
+	return delta;
+}
+
+// indent a single line of XML
+void indentXMLLine(area, thisLineNum) {
+	if(thisLineNum > 1) {
+		buffer = area.getView().getBuffer();
+		
+		previousLineNum = buffer.getPriorNonEmptyLine(thisLineNum);
+		previousLineText = area.getLineText(previousLineNum);
+		previousLineWhitespaceCharCount = new int[1];
+		previousLineIndent = buffer.getCurrentIndentForLine(previousLineNum, previousLineWhitespaceCharCount);
+		previousLineElementNestingDelta = getElementNestingDelta(previousLineText);
+		
+		thisLineText = area.getLineText(thisLineNum);
+		thisLineWhitespaceCharCount = new int[1];
+		thisLineIndent = buffer.getCurrentIndentForLine(thisLineNum, thisLineWhitespaceCharCount);
+		thisLineElementNestingDelta = getElementNestingDelta(thisLineText);
+		
+		indentUnit = buffer.getIndentSize();
+
+		if(thisLineText.trim().length() == 0) {
+			// this line only contains whitespace so leave it as it is 
+			return;
+		}
+		else if(thisLineElementNestingDelta < 0) {
+			// this line reduces the nesting
+			if(thisLineText.trim().indexOf('<') == 0) {
+				// this line has no text before first '<'
+				if(previousLineElementNestingDelta < 0) {
+					// previous line reduces the nesting
+					if(previousLineText.trim().indexOf('<') == 0) {
+						// both this line and the previous line reduce the nesting and
+						// neither line has text before the first '<'
+						newLineIndent = previousLineIndent + indentUnit * thisLineElementNestingDelta;
+					}
+					else {
+						// both this line and the previous line reduce the nesting and this
+						// line has no text before the first '<' but the previous line does
+						// have text before the first '<'
+						newLineIndent = previousLineIndent + indentUnit * (previousLineElementNestingDelta + thisLineElementNestingDelta);
+					}
+				}
+				else {
+					// this line reduces the nesting but the previous line does not and this line
+					// has no text before the first '<'
+					newLineIndent = previousLineIndent + indentUnit * (previousLineElementNestingDelta + thisLineElementNestingDelta);
+				}
+			}
+			else {
+				// this line reduces the nesting and has text before the first '<'
+				newLineIndent = previousLineIndent + indentUnit * previousLineElementNestingDelta;
+			}
+		}
+		else {
+			// this line doesn't reduce the nesting
+			if(previousLineElementNestingDelta > 0) {
+				// this line doesn't reduce the nesting and the previous line increases the nesting
+				newLineIndent = previousLineIndent + indentUnit * previousLineElementNestingDelta;
+			}
+			else if(previousLineElementNestingDelta < 0) {
+				// this line doesn't reduce the nesting but the previous line does reduce the nesting
+				if(previousLineText.trim().indexOf('<') == 0) {
+					// this line doesn't reduce the nesting but the previous line does reduce the
+					// nesting and the previous line has no text before the first '<'
+					newLineIndent = previousLineIndent;
+				}
+				else {
+					// this line doesn't reduce the nesting but the previous line does reduce the
+					// nesting and the previous line has text before the first '<'					
+					newLineIndent = previousLineIndent + indentUnit * previousLineElementNestingDelta;
+				}	
+			}
+			else {
+				// this line doesn't reduce the nesting and the previous line doesn't change the nesting
+				newLineIndent = previousLineIndent;
+			}
+		}
+		//Macros.message(area.getView(), "prevDelta = " + previousLineElementNestingDelta + ", thisDelta =  " + thisLineElementNestingDelta + ", newLineIndent = " + newLineIndent);
+		noTabs = buffer.getBooleanProperty("noTabs");
+		// if the indent has changed or tabs are not being used in this buffer but the leading
+		// whitespace contains one or more tabs, replace the indent
+		if(newLineIndent != thisLineIndent || (noTabs && thisLineIndent != thisLineWhitespaceCharCount[0])) {
+			lineStartOffset = area.getLineStartOffset(thisLineNum);
+			lineEndOffset = area.getLineEndOffset(thisLineNum);
+			
+			indent = makeIndent(newLineIndent, noTabs? 0 : buffer.getTabSize());
+			if(thisLineIndent == 0) {
+				// prefix the first character in the line with the required whitespace
+				area.selectNone();
+				area.extendSelection(lineStartOffset, lineStartOffset + 1);
+				area.setSelectedText(indent + thisLineText.charAt(0));
+			}
+			else {
+				// select whitespace at start of line
+				area.selectNone();
+				area.extendSelection(lineStartOffset, lineStartOffset + thisLineWhitespaceCharCount[0]);
+				// replace selection with new whitespace
+				area.setSelectedText(indent);
+			}
+			area.goToEndOfLine(false);
+		}
+	}
+}
+
+void indentSelection() {
+	for(l : textArea.getSelectedLines())
+		indentXMLLine(textArea, l);
+	textArea.selectNone();
+}
+
+indentSelection();
+
+
+
