@@ -1,7 +1,9 @@
 /*
  * XML_indent_lines.bsh - version 0.3
  *
- * Copyright 2011 Mark Burton (burtoogle@gmail.com)
+ * Copyright 2011 Mark Burton (markb@smartavionics.com)
+ *
+ * Suggest bind to C-i and use with "Shortcut saver" plugin to make mode specific.
  *
  * Inspired by Robert McKinnon's Ruby_auto_indent_and_insert_end.bsh
  *
