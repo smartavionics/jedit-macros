@@ -1,0 +1,3 @@
+
+if(Macros.confirm(view, "Really quit jEdit?", JOptionPane.YES_NO_OPTION) == JOptionPane.OK_OPTION)
+	jEdit.exit(view, false);
