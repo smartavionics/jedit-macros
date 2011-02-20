@@ -6,3 +6,5 @@ XML_indent_lines.bsh          Indents the lines in the selection relative to the
                               Typically, bound to C-i - use with "Shortcut Saver" plugin to make mode specific.
                               Beware - it doesn't know about preserve whitespace elements.
 
+Confirm_Exit.bsh              Bind to C-q to avoid the hassle of closing the editor by mistake.
+
